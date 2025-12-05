@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Classroom Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-header">
+        <div class="header-left">
+            <button class="menu-btn">☰</button>
+            <div class="logo">SMART CLASSROOM</div>
+        </div>
+        <div class="header-center">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search room number..." onkeyup="filterRooms()">
+                <button class="search-btn">🔍</button>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="icon-btn">🔗</button>
+            <div class="profile">
+                <div class="profile-avatar">N</div>
+                <span>Nancy</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="main-nav">
+        <a href="#" class="nav-tab active" onclick="showTab('dashboard')">
+            <span class="icon">📊</span> Class Progress
+        </a>
+        <a href="#" class="nav-tab" onclick="showTab('analytics')">
+            <span class="icon">📈</span> Analysis
+        </a>
+    </nav>
+
+    <!-- Control Bar -->
+    <div class="control-bar" id="controlBar">
+        <div class="control-left">
+            <select class="class-select" id="filterSelect" onchange="applyFilter()">
+                <option value="all">📚 All Rooms</option>
+                <option value="classrooms">🏫 Classrooms Only</option>
+                <option value="labs">🔬 Labs Only</option>
+                <option value="lights-on">💡 Lights ON Rooms</option>
+                <option value="lights-off">🔌 Lights OFF Rooms</option>
+            </select>
+            <button class="make-group-btn" onclick="openGroupModal()">👥 Make Group</button>
+        </div>
+        <div class="control-right">
+            <button class="icon-btn-small" onclick="printReport()" title="Print Report">🖨️</button>
+            <button class="icon-btn-small" onclick="downloadCSV()" title="Download CSV">📥</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="dashboardView" class="view-content">
+        <!-- Data Table -->
+        <div class="table-container" id="tableContainer">
+            <table class="data-table" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="checkbox-col">
+                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        </th>
+                        <th class="sortable" onclick="sortTable(1)">
+                            Room Number ▼
+                        </th>
+                        <th>Last Update</th>
+                        <th>PIR Motion</th>
+                        <th>LDR Light</th>
+                        <th>Distance (cm)</th>
+                        <th>Light Status</th>
+                        <th>People in Room</th>
+                        <th>Update Time</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    <!-- Data will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ANALYTICS VIEW -->
+    <div id="analyticsView" class="view-content" style="display: none;">
+        <div class="analytics-container">
+            
+            <!-- Overall Statistics -->
+            <div class="analytics-section">
+                <h3>📊 Overall Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🏢</div>
+                        <div class="stat-value" id="totalRooms">0</div>
+                        <div class="stat-label">Total Rooms</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💡</div>
+                        <div class="stat-value" id="lightsOn">0</div>
+                        <div class="stat-label">Lights ON</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔌</div>
+                        <div class="stat-value" id="lightsOff">0</div>
+                        <div class="stat-label">Lights OFF</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-value" id="occupied">0</div>
+                        <div class="stat-label">Occupied</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Energy Efficiency -->
+            <div class="analytics-section">
+                <h3>⚡ Energy Efficiency</h3>
+                <div class="stats-grid">
+                    <div class="stat-card waste">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-value" id="energyWaste">0</div>
+                        <div class="stat-label">Lights ON (No People)</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-value" id="efficient">0</div>
+                        <div class="stat-label">Efficient Rooms</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-value" id="efficiencyRate">0%</div>
+                        <div class="stat-label">Efficiency Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Motion & Light Sensors -->
+            <div class="analytics-section">
+                <h3>🎯 Motion Detection</h3>
+                <div class="stats-grid">
+                    <div class="stat-card detected">
+                        <div class="stat-icon">🔴</div>
+                        <div class="stat-value" id="motionDetected">0</div>
+                        <div class="stat-label">Motion Detected</div>
+                    </div>
+                    <div class="stat-card clear">
+                        <div class="stat-icon">🟢</div>
+                        <div class="stat-value" id="motionClear">0</div>
+                        <div class="stat-label">No Motion</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analytics-section">
+                <h3>💡 Light Sensor (LDR)</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">☀️</div>
+                        <div class="stat-value" id="brightRooms">0</div>
+                        <div class="stat-label">Bright Rooms</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🌙</div>
+                        <div class="stat-value" id="darkRooms">0</div>
+                        <div class="stat-label">Dark Rooms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Room-wise Occupancy -->
+            <div class="analytics-section full-width">
+                <h3>📍 Room-wise Occupancy</h3>
+                <div class="room-grid" id="roomOccupancyList">
+                    <!-- Dynamic room cards -->
+                </div>
+            </div>
+
+            <!-- Top Active Rooms -->
+            <div class="analytics-section full-width">
+                <h3>🏆 Most Active Rooms</h3>
+                <div class="top-rooms-list" id="topRoomsList">
+                    <!-- Dynamic top rooms -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Make Group Modal -->
+    <div id="groupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👥 Manage Rooms</h2>
+                <button class="close-btn" onclick="closeGroupModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h3>Add New Room</h3>
+                    <div class="input-group">
+                        <input type="text" id="newRoomName" placeholder="Enter room name (e.g., Room 108, Lab D4)">
+                        <button class="btn-primary" onclick="addNewRoom()">Add Room</button>
+                    </div>
+                </div>
+                
+                <div class="modal-section">
+                    <h3>Existing Rooms</h3>
+                    <div class="room-list" id="roomList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <h3>Create Group</h3>
+                    <p class="help-text">Select rooms above and create a custom group for monitoring</p>
+                    <div class="input-group">
+                        <input type="text" id="groupName" placeholder="Group name (e.g., Ground Floor, Science Block)">
+                        <button class="btn-secondary" onclick="createGroup()">Create Group</button>
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <h3>Saved Groups</h3>
+                    <div class="groups-list" id="groupsList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

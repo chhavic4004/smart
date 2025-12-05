@@ -1,0 +1,1067 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+}
+
+/* Top Header */
+.top-header {
+    background: #fff;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.menu-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 8px;
+}
+
+.logo {
+    font-size: 16px;
+    font-weight: 600;
+    color: #0066cc;
+}
+
+.header-center {
+    flex: 1;
+    max-width: 600px;
+    margin: 0 40px;
+}
+
+.search-box {
+    display: flex;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    height: 36px;
+}
+
+.search-box input {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 0 15px;
+    font-size: 14px;
+    outline: none;
+}
+
+.search-btn {
+    background: none;
+    border: none;
+    padding: 0 15px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+}
+
+.profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.profile-avatar {
+    width: 32px;
+    height: 32px;
+    background: #0066cc;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.profile span {
+    font-size: 14px;
+}
+
+/* Main Navigation */
+.main-nav {
+    background: #0066cc;
+    display: flex;
+    padding: 0 20px;
+    gap: 2px;
+}
+
+.nav-tab {
+    background: #0066cc;
+    color: white;
+    text-decoration: none;
+    padding: 15px 25px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.nav-tab:hover {
+    background: #0052a3;
+}
+
+.nav-tab.active {
+    background: #fff;
+    color: #0066cc;
+}
+
+.nav-tab .icon {
+    font-size: 16px;
+}
+
+/* Control Bar */
+.control-bar {
+    background: #e8e8e8;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.control-left {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.class-select {
+    background: white;
+    border: 1px solid #999;
+    padding: 8px 35px 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23333' stroke-width='2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    min-width: 180px;
+}
+
+.make-group-btn {
+    background: #0066cc;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.make-group-btn:hover {
+    background: #0052a3;
+}
+
+.control-right {
+    display: flex;
+    gap: 10px;
+}
+
+.icon-btn-small {
+    background: white;
+    border: 1px solid #999;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.icon-btn-small:hover {
+    background: #f5f5f5;
+}
+
+/* Data Table */
+.table-container {
+    background: white;
+    margin: 0;
+    overflow-x: auto;
+    height: calc(100vh - 180px);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.data-table thead {
+    background: #f5f5f5;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table th {
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+    color: #666;
+    border-bottom: 2px solid #ddd;
+    border-right: 1px solid #e0e0e0;
+    white-space: nowrap;
+}
+
+.data-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.data-table th.sortable:hover {
+    background: #ebebeb;
+}
+
+.data-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e0e0e0;
+    border-right: 1px solid #e0e0e0;
+}
+
+.data-table tbody tr:hover {
+    background: #fafafa;
+}
+
+.checkbox-col {
+    width: 40px;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-badge.detected {
+    background: #ff4444;
+    color: white;
+}
+
+.status-badge.clear {
+    background: #44cc44;
+    color: white;
+}
+
+.status-badge.on {
+    background: #ffaa00;
+    color: white;
+}
+
+.status-badge.off {
+    background: #999;
+    color: white;
+}
+
+.status-badge.yes {
+    background: #0066cc;
+    color: white;
+}
+
+.status-badge.no {
+    background: #e0e0e0;
+    color: #666;
+}
+
+/* Audio Icon */
+.audio-icon {
+    color: #0066cc;
+    font-size: 16px;
+    margin-right: 5px;
+}
+
+/* Level Badge */
+.level-badge {
+    background: #ff4444;
+    color: white;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.level-badge.green {
+    background: #44cc44;
+}
+
+/* Time Column */
+.time-text {
+    color: #666;
+    font-size: 12px;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    background: #0066cc;
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 20px;
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-section {
+    margin-bottom: 25px;
+    padding-bottom: 25px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-section:last-child {
+    border-bottom: none;
+}
+
+.modal-section h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.help-text {
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background: #0066cc;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    background: #0052a3;
+}
+
+.btn-secondary {
+    background: #44cc44;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-secondary:hover {
+    background: #38a838;
+}
+
+.room-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+}
+
+.room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.room-item:last-child {
+    border-bottom: none;
+}
+
+.room-item:hover {
+    background: #f8f8f8;
+}
+
+.delete-btn {
+    background: #ff4444;
+    color: white;
+    border: none;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.delete-btn:hover {
+    background: #cc0000;
+}
+
+.groups-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.group-item {
+    background: #f5f5f5;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.group-info {
+    flex: 1;
+}
+
+.group-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.group-rooms {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Scrollbar Styling */
+.table-container::-webkit-scrollbar,
+.room-list::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.table-container::-webkit-scrollbar-track,
+.room-list::-webkit-scrollbar-track {
+    background: #f5f5f5;
+}
+
+.table-container::-webkit-scrollbar-thumb,
+.room-list::-webkit-scrollbar-thumb {
+    background: #ccc;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover,
+.room-list::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .header-center {
+        margin: 0 20px;
+    }
+    
+    .nav-tab {
+        padding: 12px 15px;
+        font-size: 13px;
+    }
+    
+    .data-table {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-center {
+        display: none;
+    }
+    
+    .nav-tab span:not(.icon) {
+        display: none;
+    }
+    
+    .control-bar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+}
+
+/* ========================================
+   ADD THESE STYLES TO YOUR EXISTING dashboard.css
+   (Don't replace - just add at the bottom!)
+   ======================================== */
+
+/* View Content Containers */
+.view-content {
+    width: 100%;
+}
+
+/* Analytics Container */
+.analytics-container {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.analytics-section {
+    background: white;
+    border: 1px solid #ddd;
+    padding: 20px;
+}
+
+.analytics-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 18px;
+    color: #333;
+    border-bottom: 2px solid #0066cc;
+    padding-bottom: 10px;
+}
+
+.analytics-section.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.stat-card {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card.waste {
+    background: #fff3cd;
+    border-color: #ffc107;
+}
+
+.stat-card.success {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.stat-card.detected {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+
+.stat-card.clear {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.stat-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+/* Room Grid for Analytics */
+.room-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.room-card {
+    background: white;
+    border: 2px solid #ddd;
+    padding: 15px;
+    transition: all 0.2s;
+}
+
+.room-card:hover {
+    border-color: #0066cc;
+    box-shadow: 0 2px 8px rgba(0,102,204,0.2);
+}
+
+.room-card.occupied {
+    border-color: #28a745;
+    background: #f0fff4;
+}
+
+.room-card.empty {
+    border-color: #6c757d;
+    background: #f8f9fa;
+}
+
+.room-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.room-name {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.room-status {
+    font-size: 24px;
+}
+
+.room-details {
+    font-size: 13px;
+    color: #666;
+}
+
+.room-details div {
+    margin: 5px 0;
+}
+
+/* Top Rooms List */
+.top-rooms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.top-room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-left: 4px solid #0066cc;
+}
+
+.top-room-name {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.top-room-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    color: #666;
+}
+
+.top-room-badge {
+    background: #0066cc;
+    color: white;
+    padding: 4px 10px;
+    margin-right: 10px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* ========================================
+   ADD THESE STYLES TO YOUR EXISTING dashboard.css
+   (Don't replace - just add at the bottom!)
+   ======================================== */
+
+/* View Content Containers */
+.view-content {
+    width: 100%;
+}
+
+/* Analytics Container */
+.analytics-container {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.analytics-section {
+    background: white;
+    border: 1px solid #ddd;
+    padding: 20px;
+}
+
+.analytics-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 18px;
+    color: #333;
+    border-bottom: 2px solid #0066cc;
+    padding-bottom: 10px;
+}
+
+.analytics-section.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.stat-card {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card.waste {
+    background: #fff3cd;
+    border-color: #ffc107;
+}
+
+.stat-card.success {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.stat-card.detected {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+
+.stat-card.clear {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.stat-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+/* Progress Bars */
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e0e0e0;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+/* Chart Containers */
+.chart-container {
+    width: 100%;
+    height: 250px;
+    position: relative;
+}
+
+.chart-container-large {
+    width: 100%;
+    height: 400px;
+    position: relative;
+}
+
+/* Gauge Container */
+.gauge-container {
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.gauge-svg {
+    width: 100%;
+    height: auto;
+}
+
+/* Room Bars */
+.room-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.room-bar-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.room-bar-label {
+    min-width: 100px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.room-bar-track {
+    flex: 1;
+    height: 30px;
+    background: #e0e0e0;
+    position: relative;
+    overflow: hidden;
+}
+
+.room-bar-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.room-bar-fill.occupied {
+    background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.room-bar-fill.empty {
+    background: linear-gradient(90deg, #6c757d, #868e96);
+}
+
+.room-bar-info {
+    min-width: 100px;
+    text-align: right;
+    font-size: 13px;
+    color: #666;
+}
+
+/* Room Grid for Analytics */
+.room-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.room-card {
+    background: white;
+    border: 2px solid #ddd;
+    padding: 15px;
+    transition: all 0.2s;
+}
+
+.room-card:hover {
+    border-color: #0066cc;
+    box-shadow: 0 2px 8px rgba(0,102,204,0.2);
+}
+
+.room-card.occupied {
+    border-color: #28a745;
+    background: #f0fff4;
+}
+
+.room-card.empty {
+    border-color: #6c757d;
+    background: #f8f9fa;
+}
+
+.room-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.room-name {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.room-status {
+    font-size: 24px;
+}
+
+.room-details {
+    font-size: 13px;
+    color: #666;
+}
+
+.room-details div {
+    margin: 5px 0;
+}
+
+/* Top Rooms List */
+.top-rooms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.top-room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-left: 4px solid #0066cc;
+    transition: all 0.2s;
+}
+
+.top-room-item:hover {
+    background: #e9ecef;
+    transform: translateX(5px);
+}
+
+.top-room-name {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.top-room-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    color: #666;
+}
+
+.top-room-badge {
+    background: linear-gradient(135deg, #0066cc, #0052a3);
+    color: white;
+    padding: 4px 10px;
+    margin-right: 10px;
+    font-size: 12px;
+    font-weight: bold;
+}
+/* CSS for Highlighting the Real-Time Room */
+/* 1. Highlight the entire row in the Dashboard table */
+tr.real-time-room {
+    background-color: #e6f7ff; /* Light Blue background */
+    border: 2px solid #00aaff; /* Blue border */
+}
+
+/* 2. Highlight the LIVE badge next to the room name */
+.live-badge {
+    color: #ff4500; /* Red-Orange color */
+    font-weight: bold;
+    margin-left: 5px;
+    font-size: 10px;
+    background-color: #ffe0e0; /* Light pink background */
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+/* 3. Highlight the cards in the Analytics view (optional) */
+.room-card.real-time-card {
+    border: 2px solid #00aaff;
+    box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+}
