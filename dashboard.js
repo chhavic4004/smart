@@ -6,7 +6,7 @@
 // --- 🎯 CSV DATA EMBEDDED (Your sensor data) ---
 const CSV_CONFIG = {
     realTimeRoom: 'Room 101',
-    updateInterval: 15000, // 15 seconds
+    updateInterval: 5000, // 5 seconds (faster updates!)
 };
 
 // Your CSV data embedded directly (all 200 entries)
@@ -293,26 +293,18 @@ let filteredData = [...roomData];
 function updateFromCSV() {
     const { realTimeRoom } = CSV_CONFIG;
     
-    // Check for admin override
+    // Check for admin override - if active, use admin case instead of CSV
     const adminOverride = localStorage.getItem('adminOverride');
     if (adminOverride) {
         const override = JSON.parse(adminOverride);
         if (override.active) {
-            // Check if 15 seconds have passed since admin applied the case
-            const timePassed = Date.now() - override.timestamp;
-            if (timePassed < 15000) {
-                // Use admin-selected case data
-                applyAdminCase(override);
-                return;
-            } else {
-                // 15 seconds passed, remove override and resume auto mode
-                localStorage.removeItem('adminOverride');
-                console.log('⏰ 15 seconds passed - Resuming AUTO MODE');
-            }
+            // Admin mode is active - use the selected case
+            applyAdminCase(override);
+            return; // Skip CSV update
         }
     }
     
-    // Normal CSV auto-update mode
+    // Normal CSV auto-update mode (only runs if no admin override)
     if (csvData.length === 0) {
         console.error('⚠️ No CSV data available');
         return;
@@ -981,7 +973,7 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log(`Current Time: ${new Date().toLocaleTimeString('en-US', { hour12: false })}`);
     console.log(`Mode: ${isDayTime() ? 'DAY MODE' : 'NIGHT MODE'}`);
     console.log(`Total Rooms: ${roomData.length}`);
-    console.log(`Real-Time Room: ${CSV_CONFIG.realTimeRoom} (Updating every 15s from CSV)`);
+    console.log(`Real-Time Room: ${CSV_CONFIG.realTimeRoom} (Updating every 5s from CSV)`);
     console.log(`CSV Data Points: ${csvData.length} records loaded`);
     console.log(`==========================================`);
     
@@ -991,8 +983,27 @@ window.addEventListener('DOMContentLoaded', () => {
     // Start dummy data simulation every 3 seconds (for other rooms)
     setInterval(simulateRealTimeUpdate, 3000);
     
-    // Start CSV data updates every 15 seconds (for Room 101)
+    // Start CSV data updates every 5 seconds (for Room 101)
     setInterval(updateFromCSV, CSV_CONFIG.updateInterval);
+    
+    // Listen for localStorage changes (when admin makes changes)
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'adminOverride') {
+            console.log('🔔 Admin override detected - updating immediately!');
+            updateFromCSV(); // Update immediately when admin makes a change
+        }
+    });
+    
+    // Also check for changes every second (for same-window updates)
+    let lastOverrideCheck = localStorage.getItem('adminOverride');
+    setInterval(() => {
+        const currentOverride = localStorage.getItem('adminOverride');
+        if (currentOverride !== lastOverrideCheck) {
+            console.log('🔔 Admin override changed - updating immediately!');
+            lastOverrideCheck = currentOverride;
+            updateFromCSV();
+        }
+    }, 1000);
 });
 
 // Close modal on outside click
