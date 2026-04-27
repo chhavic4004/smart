@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Control Panel - Room 101</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="description" content="Remote control for Smart Classroom Dashboard">
+    <link rel="manifest" href="admin-manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+    
+    <!-- QR Code Library - Alternative approach -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -191,6 +201,100 @@
             gap: 10px;
         }
         
+        /* Connection Section Styles */
+        .connection-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8f2ff 100%);
+            border-radius: 15px;
+            border: 2px solid #667eea;
+        }
+        
+        .connection-info h3, .connection-status h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .url-display {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .url-display input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            background: white;
+        }
+        
+        .url-display button {
+            padding: 10px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .qr-container {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .qr-label {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-dot.connected {
+            background: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        
+        .status-dot.disconnected {
+            background: #dc3545;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
+        
+        .network-info {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .network-info p {
+            margin: 5px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .connection-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -297,6 +401,33 @@
                 <div class="status-item">
                     <div class="label">Selected Case</div>
                     <div class="value" id="selectedCaseDisplay">None</div>
+                </div>
+            </div>
+            
+            <!-- Connection & QR Code Section -->
+            <div class="connection-section">
+                <div class="connection-info">
+                    <h3>📱 Remote Access</h3>
+                    <p>Scan QR code or use URL on your phone:</p>
+                    <div class="url-display">
+                        <input type="text" id="adminUrl" readonly value="http://10.143.85.34:8000/admin_control_panel.html">
+                        <button onclick="copyUrl()">📋 Copy</button>
+                    </div>
+                    <div class="qr-container">
+                        <div id="qrcode"></div>
+                        <p class="qr-label">Scan with phone camera</p>
+                    </div>
+                </div>
+                <div class="connection-status">
+                    <h3>🔗 Connection Status</h3>
+                    <div class="status-indicator">
+                        <span id="mqttStatus" class="status-dot disconnected"></span>
+                        <span id="mqttStatusText">Connecting to MQTT...</span>
+                    </div>
+                    <div class="network-info">
+                        <p><strong>Network:</strong> <span id="networkType">Checking...</span></p>
+                        <p><strong>IP Address:</strong> <span id="localIP">10.143.85.34</span></p>
+                    </div>
                 </div>
             </div>
             
@@ -551,8 +682,22 @@
         <span class="notification-text" id="notificationText">Case applied successfully!</span>
     </div>
     
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script>
         let selectedCase = null;
+        const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        mqttClient.on('connect', () => {
+            console.log('✅ Admin panel connected to MQTT broker');
+        });
+
+        mqttClient.on('reconnect', () => {
+            console.log('🔄 Admin panel reconnecting to MQTT broker...');
+        });
+
+        mqttClient.on('error', (err) => {
+            console.error('❌ MQTT error in admin panel:', err);
+        });
         
         // Case definitions with sensor values
         const caseData = {
@@ -586,6 +731,22 @@
             });
         });
         
+        function publishAdminCaseCommand(caseNumber) {
+            const payload = JSON.stringify({
+                room: 'Room 101',
+                action: 'ADMIN_OVERRIDE',
+                case: caseNumber,
+                timestamp: new Date().toISOString()
+            });
+
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish('smartroom/control', payload);
+                console.log(`📤 MQTT command published for admin override: ${payload}`);
+            } else {
+                console.warn('⚠️ MQTT not connected yet; admin override will still apply locally.');
+            }
+        }
+
         // Apply button
         document.getElementById('applyBtn').addEventListener('click', function() {
             if (selectedCase) {
@@ -597,12 +758,14 @@
                     timestamp: Date.now()
                 }));
                 
+                publishAdminCaseCommand(selectedCase);
+                
                 // Update mode
                 document.getElementById('currentMode').textContent = 'MANUAL MODE';
                 document.getElementById('currentMode').className = 'mode-badge mode-manual';
                 
                 // Show notification
-                showNotification(`Case ${selectedCase} applied to Room 101! Click "Resume Auto Mode" to return to CSV data.`);
+                showNotification(`Case ${selectedCase} applied to Room 101 and MQTT command sent. Click "Resume Auto Mode" to return to ThingSpeak.`);
                 
                 console.log(`✅ Admin Override: Case ${selectedCase} applied to Room 101 (Manual Mode Active)`);
             }
@@ -611,9 +774,18 @@
         // Auto mode button
         document.getElementById('autoModeBtn').addEventListener('click', function() {
             localStorage.removeItem('adminOverride');
-            document.getElementById('currentMode').textContent = 'AUTO MODE';
-            document.getElementById('currentMode').className = 'mode-badge mode-auto';
-            showNotification('Switched back to Auto Mode');
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish('smartroom/control', JSON.stringify({
+                    room: 'Room 101',
+                    action: 'RESUME_AUTO',
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            setManualModeState(false, null);
+            document.querySelectorAll('.case-card').forEach(c => c.classList.remove('selected'));
+            selectedCase = null;
+            document.getElementById('applyBtn').disabled = true;
+            showNotification('Switched back to Auto Mode. ThingSpeak will resume updating Room 101.');
         });
         
         // Clear button
@@ -636,18 +808,189 @@
             }, 3000);
         }
         
+        function setManualModeState(active, caseNumber) {
+            const currentMode = document.getElementById('currentMode');
+            const selectedDisplay = document.getElementById('selectedCaseDisplay');
+            if (active) {
+                currentMode.textContent = 'MANUAL MODE';
+                currentMode.className = 'mode-badge mode-manual';
+                selectedDisplay.textContent = caseNumber ? `Case ${caseNumber}` : 'None';
+            } else {
+                currentMode.textContent = 'AUTO MODE';
+                currentMode.className = 'mode-badge mode-auto';
+                selectedDisplay.textContent = 'None';
+            }
+        }
+
         // Check current mode on load
         window.addEventListener('DOMContentLoaded', function() {
             const override = localStorage.getItem('adminOverride');
             if (override) {
                 const data = JSON.parse(override);
                 if (data.active) {
-                    document.getElementById('currentMode').textContent = 'MANUAL MODE';
-                    document.getElementById('currentMode').className = 'mode-badge mode-manual';
-                    document.getElementById('selectedCaseDisplay').textContent = `Case ${data.case}`;
+                    selectedCase = data.case;
+                    const selectedCard = document.querySelector(`.case-card[data-case="${selectedCase}"]`);
+                    if (selectedCard) {
+                        selectedCard.classList.add('selected');
+                    }
+                    document.getElementById('applyBtn').disabled = false;
+                    setManualModeState(true, selectedCase);
+                } else {
+                    setManualModeState(false, null);
                 }
+            } else {
+                setManualModeState(false, null);
+            }
+            
+            // Initialize connection features
+            initializeConnectionFeatures();
+        });
+        
+        // Connection features for remote access
+        function initializeConnectionFeatures() {
+            // Register service worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/admin-sw.js')
+                    .then(() => console.log('Service Worker registered'))
+                    .catch((error) => console.log('Service Worker registration failed:', error));
+            }
+            
+            // Generate QR Code with fallback
+            generateQRCode();
+            
+            // Update network info
+            updateNetworkInfo();
+            
+            // Monitor MQTT connection
+            setInterval(updateMQTTStatus, 1000);
+        }
+        
+        function generateQRCode() {
+            const currentUrl = window.location.href;
+            document.getElementById('adminUrl').value = currentUrl;
+            
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = ''; // Clear any existing content
+            
+            try {
+                // Try modern QRCode library
+                if (typeof QRCode !== 'undefined') {
+                    new QRCode(qrContainer, {
+                        text: currentUrl,
+                        width: 128,
+                        height: 128,
+                        colorDark: '#667eea',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    console.log('✅ QR Code generated with QRCode library');
+                } else {
+                    // Fallback to API-based QR code
+                    generateQRCodeAPI(currentUrl);
+                }
+            } catch (error) {
+                console.error('❌ QR Code generation failed:', error);
+                generateQRCodeAPI(currentUrl);
+            }
+        }
+        
+        function generateQRCodeAPI(url) {
+            const qrContainer = document.getElementById('qrcode');
+            const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(url)}&color=667eea&bgcolor=ffffff`;
+            
+            const img = document.createElement('img');
+            img.src = apiUrl;
+            img.alt = 'QR Code for Admin Panel';
+            img.style.width = '128px';
+            img.style.height = '128px';
+            img.onload = () => console.log('✅ QR Code generated with API');
+            img.onerror = () => {
+                console.error('❌ QR Code API failed');
+                qrContainer.innerHTML = '<p style="color: red; font-size: 12px;">QR Code failed to load</p>';
+            };
+            
+            qrContainer.appendChild(img);
+        }
+        
+        function copyUrl() {
+            const urlInput = document.getElementById('adminUrl');
+            urlInput.select();
+            document.execCommand('copy');
+            showNotification('URL copied to clipboard!');
+        }
+        
+        function updateNetworkInfo() {
+            // Detect network type
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const networkType = connection ? connection.effectiveType : 'Unknown';
+            document.getElementById('networkType').textContent = networkType;
+            
+            // Get local IP (this is approximate)
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('localIP').textContent = data.ip;
+                })
+                .catch(() => {
+                    document.getElementById('localIP').textContent = '10.143.85.34 (Local)';
+                });
+        }
+        
+        function updateMQTTStatus() {
+            const statusDot = document.getElementById('mqttStatus');
+            const statusText = document.getElementById('mqttStatusText');
+            
+            if (mqttClient && mqttClient.connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Connected to MQTT Broker';
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = 'Connecting to MQTT...';
+            }
+        }
+        
+        // PWA Install Prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button if not already installed
+            if (!window.matchMedia('(display-mode: standalone)').matches) {
+                showInstallPrompt();
             }
         });
+        
+        function showInstallPrompt() {
+            const installBtn = document.createElement('button');
+            installBtn.innerHTML = '📱 Install as App';
+            installBtn.className = 'btn btn-primary';
+            installBtn.style.position = 'fixed';
+            installBtn.style.bottom = '20px';
+            installBtn.style.right = '20px';
+            installBtn.style.zIndex = '1000';
+            
+            installBtn.onclick = async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                }
+                installBtn.remove();
+            };
+            
+            document.body.appendChild(installBtn);
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                if (installBtn.parentNode) {
+                    installBtn.remove();
+                }
+            }, 10000);
+        }
     </script>
 </body>
 </html>

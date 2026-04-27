@@ -8,6 +8,18 @@
 // Connect to MQTT broker (WebSocket version)
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
+// --- 🎛️ ADMIN CONTROL CASE DATA ---
+const caseData = {
+    1: { pir: 0, ldr: 800, distance: 250, description: "Nobody in class, bright" },
+    2: { pir: 0, ldr: 50, distance: 250, description: "Nobody in class, dark" },
+    3: { pir: 1, ldr: 800, distance: 75, description: "Someone enters, bright" },
+    4: { pir: 1, ldr: 50, distance: 75, description: "Someone enters, dark" },
+    5: { pir: 1, ldr: 500, distance: 60, description: "Person inside, any light" },
+    6: { pir: 0, ldr: 50, distance: 250, description: "Person leaves, dark" },
+    7: { pir: 0, ldr: 800, distance: 250, description: "Person leaves, bright" },
+    8: { pir: 0, ldr: 400, distance: 280, description: "No motion for long time" }
+};
+
 client.on("connect", () => {
     console.log("✅ Connected to MQTT from Website");
 
@@ -15,16 +27,62 @@ client.on("connect", () => {
     client.subscribe("smartroom/pir");
     client.subscribe("smartroom/ldr");
     client.subscribe("smartroom/distance");
+    
+    // Subscribe to admin control topic
+    client.subscribe("smartroom/control");
 });
 
 client.on("message", (topic, message) => {
     const value = message.toString();
     console.log("📩 MQTT Data:", topic, value);
 
-    updateRoom101FromMQTT(topic, value);
+    if (topic === "smartroom/control") {
+        handleAdminControlMessage(value);
+    } else {
+        updateRoom101FromMQTT(topic, value);
+    }
 });
 
-// --- 🎯 CSV DATA EMBEDDED (Your sensor data) ---
+// --- �️ ADMIN CONTROL MESSAGE HANDLER ---
+function handleAdminControlMessage(message) {
+    try {
+        const data = JSON.parse(message);
+        console.log("🎛️ Admin Control Message:", data);
+
+        if (data.action === "ADMIN_OVERRIDE") {
+            // Apply admin override from remote control
+            const overrideData = {
+                active: true,
+                case: data.case,
+                data: caseData[data.case], // Use the same case data as admin panel
+                timestamp: Date.now(),
+                source: 'mqtt'
+            };
+
+            localStorage.setItem('adminOverride', JSON.stringify(overrideData));
+            applyAdminCase(overrideData);
+
+            console.log(`🎛️ Remote Admin Override Applied: Case ${data.case} from ${data.room}`);
+
+            // Update UI to show manual mode
+            updateThingSpeakFetchPanel('Manual override active (Remote)', 'manual');
+
+        } else if (data.action === "RESUME_AUTO") {
+            // Clear admin override and resume auto mode
+            localStorage.removeItem('adminOverride');
+            console.log("🎛️ Remote Resume Auto Mode");
+
+            // Resume normal operation
+            updateThingSpeakFetchPanel('Auto mode resumed (Remote)', 'idle');
+            fetchThingSpeakData();
+        }
+
+    } catch (error) {
+        console.error("❌ Error parsing admin control message:", error);
+    }
+}
+
+// --- �🎯 CSV DATA EMBEDDED (Your sensor data) ---
 const CSV_CONFIG = {
     realTimeRoom: 'Room 101',
     updateInterval: 5000, // 5 seconds (faster updates!)
@@ -39,210 +97,40 @@ const EWS_SESSION_LIMIT = 20;
 let ewsTrendChartInstance = null;
 let ewsTrendLastRenderKey = '';
 
-// Your CSV data embedded directly (all 200 entries)
-const csvData = [
-    {pir: 0, ldr: 823, distance: 131},
-    {pir: 1, ldr: 27, distance: 122},
-    {pir: 1, ldr: 35, distance: 29},
-    {pir: 1, ldr: 117, distance: 26},
-    {pir: 0, ldr: 932, distance: 121},
-    {pir: 0, ldr: 171, distance: 44},
-    {pir: 1, ldr: 169, distance: 123},
-    {pir: 1, ldr: 19, distance: 172},
-    {pir: 1, ldr: 116, distance: 85},
-    {pir: 0, ldr: 58, distance: 189},
-    {pir: 1, ldr: 45, distance: 78},
-    {pir: 0, ldr: 33, distance: 51},
-    {pir: 1, ldr: 46, distance: 44},
-    {pir: 0, ldr: 28, distance: 195},
-    {pir: 0, ldr: 900, distance: 100},
-    {pir: 1, ldr: 174, distance: 167},
-    {pir: 0, ldr: 888, distance: 88},
-    {pir: 0, ldr: 888, distance: 88},
-    {pir: 1, ldr: 129, distance: 191},
-    {pir: 0, ldr: 903, distance: 133},
-    {pir: 1, ldr: 13, distance: 65},
-    {pir: 0, ldr: 127, distance: 179},
-    {pir: 0, ldr: 182, distance: 44},
-    {pir: 0, ldr: 60, distance: 88},
-    {pir: 0, ldr: 7, distance: 142},
-    {pir: 0, ldr: 758, distance: 39},
-    {pir: 0, ldr: 980, distance: 163},
-    {pir: 0, ldr: 46, distance: 194},
-    {pir: 0, ldr: 158, distance: 21},
-    {pir: 0, ldr: 103, distance: 50},
-    {pir: 1, ldr: 168, distance: 118},
-    {pir: 0, ldr: 54, distance: 163},
-    {pir: 1, ldr: 91, distance: 129},
-    {pir: 0, ldr: 723, distance: 77},
-    {pir: 0, ldr: 64, distance: 167},
-    {pir: 0, ldr: 44, distance: 63},
-    {pir: 1, ldr: 87, distance: 149},
-    {pir: 0, ldr: 178, distance: 93},
-    {pir: 0, ldr: 75, distance: 179},
-    {pir: 1, ldr: 26, distance: 109},
-    {pir: 0, ldr: 28, distance: 73},
-    {pir: 1, ldr: 192, distance: 144},
-    {pir: 0, ldr: 730, distance: 31},
-    {pir: 0, ldr: 159, distance: 61},
-    {pir: 1, ldr: 96, distance: 22},
-    {pir: 1, ldr: 194, distance: 34},
-    {pir: 0, ldr: 147, distance: 59},
-    {pir: 1, ldr: 112, distance: 74},
-    {pir: 0, ldr: 942, distance: 27},
-    {pir: 1, ldr: 136, distance: 69},
-    {pir: 1, ldr: 157, distance: 152},
-    {pir: 0, ldr: 740, distance: 148},
-    {pir: 1, ldr: 198, distance: 131},
-    {pir: 0, ldr: 800, distance: 46},
-    {pir: 1, ldr: 151, distance: 39},
-    {pir: 1, ldr: 191, distance: 36},
-    {pir: 1, ldr: 18, distance: 164},
-    {pir: 0, ldr: 172, distance: 178},
-    {pir: 0, ldr: 11, distance: 59},
-    {pir: 0, ldr: 81, distance: 175},
-    {pir: 1, ldr: 76, distance: 61},
-    {pir: 0, ldr: 98, distance: 172},
-    {pir: 0, ldr: 866, distance: 125},
-    {pir: 1, ldr: 103, distance: 87},
-    {pir: 1, ldr: 29, distance: 61},
-    {pir: 0, ldr: 741, distance: 182},
-    {pir: 0, ldr: 732, distance: 34},
-    {pir: 0, ldr: 4, distance: 123},
-    {pir: 1, ldr: 101, distance: 43},
-    {pir: 1, ldr: 61, distance: 106},
-    {pir: 1, ldr: 27, distance: 174},
-    {pir: 0, ldr: 898, distance: 47},
-    {pir: 1, ldr: 28, distance: 48},
-    {pir: 1, ldr: 178, distance: 70},
-    {pir: 0, ldr: 83, distance: 181},
-    {pir: 1, ldr: 35, distance: 134},
-    {pir: 1, ldr: 17, distance: 177},
-    {pir: 0, ldr: 905, distance: 189},
-    {pir: 1, ldr: 190, distance: 41},
-    {pir: 1, ldr: 147, distance: 87},
-    {pir: 1, ldr: 51, distance: 80},
-    {pir: 0, ldr: 20, distance: 100},
-    {pir: 1, ldr: 165, distance: 69},
-    {pir: 1, ldr: 82, distance: 182},
-    {pir: 1, ldr: 70, distance: 175},
-    {pir: 1, ldr: 141, distance: 97},
-    {pir: 0, ldr: 90, distance: 50},
-    {pir: 1, ldr: 46, distance: 34},
-    {pir: 0, ldr: 767, distance: 165},
-    {pir: 0, ldr: 54, distance: 197},
-    {pir: 1, ldr: 157, distance: 175},
-    {pir: 1, ldr: 17, distance: 200},
-    {pir: 1, ldr: 13, distance: 166},
-    {pir: 0, ldr: 105, distance: 98},
-    {pir: 1, ldr: 185, distance: 183},
-    {pir: 0, ldr: 831, distance: 176},
-    {pir: 1, ldr: 185, distance: 75},
-    {pir: 1, ldr: 140, distance: 86},
-    {pir: 0, ldr: 872, distance: 187},
-    {pir: 1, ldr: 103, distance: 27},
-    {pir: 0, ldr: 815, distance: 60},
-    {pir: 1, ldr: 56, distance: 81},
-    {pir: 0, ldr: 880, distance: 118},
-    {pir: 0, ldr: 47, distance: 174},
-    {pir: 0, ldr: 17, distance: 118},
-    {pir: 1, ldr: 194, distance: 194},
-    {pir: 0, ldr: 943, distance: 130},
-    {pir: 1, ldr: 121, distance: 114},
-    {pir: 0, ldr: 164, distance: 51},
-    {pir: 1, ldr: 5, distance: 22},
-    {pir: 1, ldr: 79, distance: 160},
-    {pir: 0, ldr: 727, distance: 70},
-    {pir: 1, ldr: 140, distance: 78},
-    {pir: 1, ldr: 106, distance: 118},
-    {pir: 1, ldr: 132, distance: 127},
-    {pir: 1, ldr: 105, distance: 139},
-    {pir: 1, ldr: 106, distance: 53},
-    {pir: 1, ldr: 145, distance: 94},
-    {pir: 0, ldr: 153, distance: 62},
-    {pir: 1, ldr: 158, distance: 73},
-    {pir: 1, ldr: 75, distance: 140},
-    {pir: 0, ldr: 132, distance: 200},
-    {pir: 1, ldr: 104, distance: 47},
-    {pir: 1, ldr: 102, distance: 177},
-    {pir: 1, ldr: 105, distance: 45},
-    {pir: 0, ldr: 4, distance: 107},
-    {pir: 0, ldr: 798, distance: 64},
-    {pir: 0, ldr: 192, distance: 165},
-    {pir: 1, ldr: 156, distance: 38},
-    {pir: 0, ldr: 50, distance: 83},
-    {pir: 0, ldr: 32, distance: 194},
-    {pir: 1, ldr: 87, distance: 199},
-    {pir: 0, ldr: 749, distance: 51},
-    {pir: 1, ldr: 173, distance: 91},
-    {pir: 1, ldr: 135, distance: 139},
-    {pir: 0, ldr: 76, distance: 153},
-    {pir: 0, ldr: 101, distance: 109},
-    {pir: 0, ldr: 724, distance: 174},
-    {pir: 1, ldr: 182, distance: 142},
-    {pir: 1, ldr: 137, distance: 191},
-    {pir: 0, ldr: 805, distance: 88},
-    {pir: 1, ldr: 90, distance: 179},
-    {pir: 1, ldr: 142, distance: 38},
-    {pir: 0, ldr: 823, distance: 29},
-    {pir: 1, ldr: 35, distance: 179},
-    {pir: 1, ldr: 42, distance: 89},
-    {pir: 1, ldr: 27, distance: 155},
-    {pir: 0, ldr: 821, distance: 198},
-    {pir: 1, ldr: 192, distance: 100},
-    {pir: 0, ldr: 996, distance: 91},
-    {pir: 1, ldr: 197, distance: 114},
-    {pir: 1, ldr: 64, distance: 49},
-    {pir: 0, ldr: 858, distance: 135},
-    {pir: 0, ldr: 937, distance: 81},
-    {pir: 0, ldr: 811, distance: 65},
-    {pir: 0, ldr: 820, distance: 147},
-    {pir: 0, ldr: 984, distance: 132},
-    {pir: 1, ldr: 132, distance: 177},
-    {pir: 1, ldr: 48, distance: 181},
-    {pir: 0, ldr: 197, distance: 167},
-    {pir: 1, ldr: 108, distance: 196},
-    {pir: 0, ldr: 791, distance: 110},
-    {pir: 0, ldr: 113, distance: 69},
-    {pir: 1, ldr: 78, distance: 156},
-    {pir: 1, ldr: 20, distance: 42},
-    {pir: 1, ldr: 11, distance: 189},
-    {pir: 1, ldr: 131, distance: 87},
-    {pir: 0, ldr: 64, distance: 22},
-    {pir: 1, ldr: 80, distance: 161},
-    {pir: 1, ldr: 147, distance: 98},
-    {pir: 1, ldr: 179, distance: 178},
-    {pir: 0, ldr: 59, distance: 199},
-    {pir: 1, ldr: 193, distance: 59},
-    {pir: 1, ldr: 122, distance: 91},
-    {pir: 0, ldr: 192, distance: 73},
-    {pir: 0, ldr: 29, distance: 149},
-    {pir: 0, ldr: 704, distance: 94},
-    {pir: 1, ldr: 81, distance: 138},
-    {pir: 0, ldr: 13, distance: 183},
-    {pir: 0, ldr: 836, distance: 171},
-    {pir: 1, ldr: 10, distance: 21},
-    {pir: 1, ldr: 160, distance: 200},
-    {pir: 1, ldr: 184, distance: 129},
-    {pir: 0, ldr: 759, distance: 24},
-    {pir: 0, ldr: 913, distance: 147},
-    {pir: 1, ldr: 51, distance: 176},
-    {pir: 0, ldr: 797, distance: 67},
-    {pir: 0, ldr: 786, distance: 155},
-    {pir: 1, ldr: 183, distance: 171},
-    {pir: 1, ldr: 98, distance: 127},
-    {pir: 1, ldr: 33, distance: 140},
-    {pir: 0, ldr: 799, distance: 25},
-    {pir: 1, ldr: 139, distance: 100},
-    {pir: 0, ldr: 921, distance: 136},
-    {pir: 1, ldr: 65, distance: 119},
-    {pir: 1, ldr: 174, distance: 101},
-    {pir: 1, ldr: 77, distance: 125},
-    {pir: 0, ldr: 99, distance: 128},
-    {pir: 0, ldr: 123, distance: 95},
-    {pir: 1, ldr: 29, distance: 24},
-    {pir: 0, ldr: 125, distance: 139}
-];
+// Load CSV data from file
+let csvData = [];
+let csvLoaded = false;
+
+async function loadCSVData() {
+    try {
+        const response = await fetch('feed_thingspeak_IST.csv');
+        const text = await response.text();
+        const lines = text.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',');
+        
+        csvData = lines.slice(1).map(line => {
+            const values = line.split(',');
+            return {
+                created_at: values[0],
+                pir: parseInt(values[1]) || 0,
+                ldr: parseInt(values[2]) || 0,
+                distance: parseInt(values[3]) || 0,
+                led: parseInt(values[4]) || 0,
+                ews: parseFloat(values[5]) || 0
+            };
+        });
+        
+        csvLoaded = true;
+        console.log(`✅ Loaded ${csvData.length} entries from feed_thingspeak_IST.csv`);
+    } catch (error) {
+        console.error('❌ Failed to load CSV:', error);
+        // Fallback to embedded data if file fails
+        csvData = [
+            {pir: 0, ldr: 823, distance: 131},
+            // ... keep some fallback data
+        ];
+    }
+}
 
 let currentDataIndex = 0;
 
@@ -410,6 +298,14 @@ function updateThingSpeakFetchPanel(status, statusClass, sourceTime) {
 }
 
 async function fetchThingSpeakData() {
+    const override = getActiveAdminOverride();
+    if (override) {
+        updateThingSpeakFetchPanel('Manual override active', 'manual');
+        console.log('⚠️ ThingSpeak fetch skipped while admin override is active');
+        applyAdminCase(override);
+        return;
+    }
+
     try {
         updateThingSpeakFetchPanel('Fetching...', 'loading');
 
@@ -482,6 +378,9 @@ function updateRoom101(pir, ldr, distance, ledState, sourceTimestamp) {
     }
 
     applyFilter();
+    if (document.getElementById('analyticsView')?.style.display !== 'none') {
+        updateAnalytics();
+    }
 }
 
 function createDefaultEwsStats(nowMs) {
@@ -979,24 +878,43 @@ function initializeEwsTracking() {
 
 initializeEwsTracking();
 
+function getActiveAdminOverride() {
+    const adminOverride = localStorage.getItem('adminOverride');
+    if (!adminOverride) {
+        return null;
+    }
+
+    try {
+        const override = JSON.parse(adminOverride);
+        return override && override.active ? override : null;
+    } catch (error) {
+        console.warn('Invalid adminOverride payload:', error);
+        return null;
+    }
+}
+
+function handleAdminOverrideState() {
+    const override = getActiveAdminOverride();
+    if (override) {
+        applyAdminCase(override);
+    } else {
+        fetchThingSpeakData();
+    }
+}
+
 // --- 🔄 UPDATE FROM CSV (with Admin Override Support) ---
 function updateFromCSV() {
     const { realTimeRoom } = CSV_CONFIG;
     
-    // Check for admin override - if active, use admin case instead of CSV
-    const adminOverride = localStorage.getItem('adminOverride');
-    if (adminOverride) {
-        const override = JSON.parse(adminOverride);
-        if (override.active) {
-            // Admin mode is active - use the selected case
-            applyAdminCase(override);
-            return; // Skip CSV update
-        }
+    const override = getActiveAdminOverride();
+    if (override) {
+        applyAdminCase(override);
+        return; // Skip CSV update
     }
     
     // Normal CSV auto-update mode (only runs if no admin override)
-    if (csvData.length === 0) {
-        console.error('⚠️ No CSV data available');
+    if (!csvLoaded || csvData.length === 0) {
+        console.error('⚠️ CSV not loaded or no data available');
         return;
     }
     
@@ -1012,17 +930,23 @@ function updateFromCSV() {
         
         const logic = calculateLightStatus(dataPoint.pir, dataPoint.ldr, dataPoint.distance);
         
-        realTimeRoomObject.lightStatus = logic.lightStatus;
+        realTimeRoomObject.lightStatus = dataPoint.led === 1 ? 'ON' : 'OFF'; // Use LED from CSV
         realTimeRoomObject.peoplePresent = logic.peoplePresent;
         
         const now = new Date();
         realTimeRoomObject.updateTime = now.toLocaleTimeString('en-US', { hour12: false });
         realTimeRoomObject.lastUpdate = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' });
-        syncEwsAfterStateMutation(realTimeRoomObject);
         
-        console.log(`✅ Room 101 AUTO [${currentDataIndex}/${csvData.length}] - ${realTimeRoomObject.updateTime} | PIR: ${dataPoint.pir} | LDR: ${dataPoint.ldr} | Distance: ${dataPoint.distance}cm | Light: ${logic.lightStatus}`);
+        // Use CSV timestamp for EWS tracking
+        const csvTimestamp = new Date(dataPoint.created_at).toISOString();
+        trackRoom101EwsFromThingSpeak(realTimeRoomObject, csvTimestamp);
+        
+        console.log(`✅ Room 101 CSV [${currentDataIndex}/${csvData.length}] - ${dataPoint.created_at} | PIR: ${dataPoint.pir} | LDR: ${dataPoint.ldr} | Distance: ${dataPoint.distance}cm | LED: ${dataPoint.led} | EWS: ${dataPoint.ews}%`);
         
         applyFilter();
+        if (document.getElementById('analyticsView')?.style.display !== 'none') {
+            updateAnalytics();
+        }
     }
 }
 
@@ -1051,6 +975,9 @@ function applyAdminCase(override) {
         console.log(`🎛️ Room 101 MANUAL (Case ${override.case}) - ${realTimeRoomObject.updateTime} | PIR: ${caseData.pir} | LDR: ${caseData.ldr} | Distance: ${caseData.distance}cm | Light: ${logic.lightStatus}`);
         
         applyFilter();
+        if (document.getElementById('analyticsView')?.style.display !== 'none') {
+            updateAnalytics();
+        }
     }
 }
 
@@ -1719,7 +1646,7 @@ function updateAnalytics() {
 }
 
 // Initialize
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     roomData.forEach(room => {
         const logic = calculateLightStatus(room.pir, room.ldr, room.distance);
         room.lightStatus = logic.lightStatus;
@@ -1751,6 +1678,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Room 101 is driven by ThingSpeak now, so avoid CSV overwrite on startup.
     // updateFromCSV();
 
+    await loadCSVData(); // Load CSV data first
     setInterval(fetchThingSpeakData, 15000); // every 15 sec
     fetchThingSpeakData(); // first load
     
@@ -1758,13 +1686,13 @@ window.addEventListener('DOMContentLoaded', () => {
     setInterval(simulateRealTimeUpdate, 3000);
     
     // Start CSV data updates every 5 seconds (for Room 101)
-    // setInterval(updateFromCSV, CSV_CONFIG.updateInterval);
+    setInterval(updateFromCSV, 1000); // Fast CSV processing for EWS
     
     // Listen for localStorage changes (when admin makes changes)
     window.addEventListener('storage', function(e) {
         if (e.key === 'adminOverride') {
             console.log('🔔 Admin override detected - updating immediately!');
-            updateFromCSV(); // Update immediately when admin makes a change
+            handleAdminOverrideState();
         }
     });
     
@@ -1775,7 +1703,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (currentOverride !== lastOverrideCheck) {
             console.log('🔔 Admin override changed - updating immediately!');
             lastOverrideCheck = currentOverride;
-            updateFromCSV();
+            handleAdminOverrideState();
         }
     }, 1000);
 });

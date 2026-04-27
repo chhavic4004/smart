@@ -231,6 +231,12 @@ body {
     background: #eef0f3;
 }
 
+.ts-status.manual {
+    color: #4d3b00;
+    border-color: #f5d76e;
+    background: #fff8e1;
+}
+
 .ts-status.loading {
     color: #8a6d1f;
     border-color: #eed38d;
