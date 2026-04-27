@@ -64,8 +64,8 @@ function handleAdminControlMessage(message) {
 
             console.log(`🎛️ Remote Admin Override Applied: Case ${data.case} from ${data.room}`);
 
-            // Update UI to show manual mode
-            updateThingSpeakFetchPanel('Manual override active (Remote)', 'manual');
+            // Keep manual override active without showing override text
+            updateThingSpeakFetchPanel('', 'manual');
 
         } else if (data.action === "RESUME_AUTO") {
             // Clear admin override and resume auto mode
