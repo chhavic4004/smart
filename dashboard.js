@@ -300,7 +300,7 @@ function updateThingSpeakFetchPanel(status, statusClass, sourceTime) {
 async function fetchThingSpeakData() {
     const override = getActiveAdminOverride();
     if (override) {
-        updateThingSpeakFetchPanel('Manual override active', 'manual');
+        updateThingSpeakFetchPanel('', 'manual');
         console.log('⚠️ ThingSpeak fetch skipped while admin override is active');
         applyAdminCase(override);
         return;
