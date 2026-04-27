@@ -57,6 +57,13 @@
         </div>
     </div>
 
+    <div class="thingspeak-panel" id="thingSpeakPanel">
+        <span class="ts-label">ThingSpeak Fetch</span>
+        <span class="ts-status idle" id="tsFetchStatus">Waiting...</span>
+        <span class="ts-time" id="tsFetchTime">Fetched at: --</span>
+        <span class="ts-source-time" id="tsSourceTime">Feed time: --</span>
+    </div>
+
     <!-- DASHBOARD VIEW -->
     <div id="dashboardView" class="view-content">
         <!-- Data Table -->
@@ -76,7 +83,8 @@
                         <th>Distance (cm)</th>
                         <th>Light Status</th>
                         <th>People in Room</th>
-                        <th>Update Time</th>
+                        <th>Energy Waste Score</th>
+                        <th>Control</th>
                     </tr>
                 </thead>
                 <tbody id="dataTableBody">
@@ -136,6 +144,21 @@
                         <div class="stat-value" id="efficiencyRate">0%</div>
                         <div class="stat-label">Efficiency Rate</div>
                     </div>
+                    <div class="stat-card waste">
+                        <div class="stat-icon">🚩</div>
+                        <div class="stat-value" id="highWasteRooms">0</div>
+                        <div class="stat-label">High Waste Rooms (EWS > 30%)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🧮</div>
+                        <div class="stat-value" id="avgEws">0%</div>
+                        <div class="stat-label">Average EWS</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-value" id="worstRoom">-</div>
+                        <div class="stat-label">Worst Room (EWS)</div>
+                    </div>
                 </div>
             </div>
 
@@ -168,6 +191,45 @@
                         <div class="stat-icon">🌙</div>
                         <div class="stat-value" id="darkRooms">0</div>
                         <div class="stat-label">Dark Rooms</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analytics-section full-width ews-session-section">
+                <h3>📈 Room 101 — Session Analysis</h3>
+                <div class="ews-session-layout">
+                    <div class="ews-chart-panel">
+                        <h4>EWS Trend (%)</h4>
+                        <canvas id="ewsTrendChart" height="170"></canvas>
+                    </div>
+                    <div class="ews-table-panel">
+                        <table class="ews-session-table">
+                            <thead>
+                                <tr>
+                                    <th>Session</th>
+                                    <th>Duration</th>
+                                    <th>Light ON Duration</th>
+                                    <th>No-Motion Duration</th>
+                                    <th>EWS</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ewsSessionRows">
+                                <tr>
+                                    <td colspan="6" style="text-align:center; color:#666;">No session data yet</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td><strong>Overall</strong></td>
+                                    <td id="ewsOverallDuration">0 min</td>
+                                    <td id="ewsOverallLightOn">0 min</td>
+                                    <td id="ewsOverallNoMotion">0 min</td>
+                                    <td id="ewsOverallScore">0%</td>
+                                    <td id="ewsOverallStatus">Normal</td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -233,6 +295,7 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>

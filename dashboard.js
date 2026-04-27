@@ -3,11 +3,41 @@
  * Real-Time Data from Embedded CSV with Live Timestamps
  */
 
+// ---------------- MQTT SETUP ----------------
+
+// Connect to MQTT broker (WebSocket version)
+const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+client.on("connect", () => {
+    console.log("✅ Connected to MQTT from Website");
+
+    // Subscribe to ESP32 topics
+    client.subscribe("smartroom/pir");
+    client.subscribe("smartroom/ldr");
+    client.subscribe("smartroom/distance");
+});
+
+client.on("message", (topic, message) => {
+    const value = message.toString();
+    console.log("📩 MQTT Data:", topic, value);
+
+    updateRoom101FromMQTT(topic, value);
+});
+
 // --- 🎯 CSV DATA EMBEDDED (Your sensor data) ---
 const CSV_CONFIG = {
     realTimeRoom: 'Room 101',
     updateInterval: 5000, // 5 seconds (faster updates!)
 };
+
+const THINGSPEAK_CHANNEL_ID = "3356492";
+const THINGSPEAK_READ_API_KEY = "KVJGYMEUKTEBPSE7"; // Set this if your ThingSpeak channel is private
+const THINGSPEAK_URL = `https://api.thingspeak.com/channels/${THINGSPEAK_CHANNEL_ID}/feeds.json?results=1${THINGSPEAK_READ_API_KEY ? `&api_key=${THINGSPEAK_READ_API_KEY}` : ""}`;
+const EWS_STORAGE_KEY = 'smartClassroomEwsStatsV1';
+const EWS_FLAG_THRESHOLD = 30;
+const EWS_SESSION_LIMIT = 20;
+let ewsTrendChartInstance = null;
+let ewsTrendLastRenderKey = '';
 
 // Your CSV data embedded directly (all 200 entries)
 const csvData = [
@@ -255,10 +285,649 @@ function calculateLightStatus(pir, ldr, distance) {
         } else {
             return {
                 lightStatus: 'OFF',
-                peoplePresent: 'NO',
+                peoplePresent: pir === 1 ? 'YES' : 'NO',
                 showDistance: false
             };
         }
+    }
+}
+
+function updateRoom101FromMQTT(topic, value) {
+    const room = roomData.find(r => r.room === "Room 101");
+
+    if (!room) return;
+
+    const previousDistance = room.distance;
+
+    if (topic === "smartroom/pir") {
+        room.pir = parseInt(value);
+    }
+
+    if (topic === "smartroom/ldr") {
+        room.ldr = parseInt(value);
+    }
+
+    if (topic === "smartroom/distance") {
+        room.distance = parseInt(value);
+    }
+
+    // Apply logic again
+    const logic = calculateLightStatus(room.pir, room.ldr, room.distance);
+    const presence = evaluateRoom101PresenceState(room.pir, room.distance, previousDistance);
+
+    room.lightStatus = room.ledState || logic.lightStatus;
+    room.peoplePresent = presence.present;
+    room.peopleStatusLabel = presence.label;
+
+    const now = new Date();
+    room.updateTime = now.toLocaleTimeString();
+    syncEwsAfterStateMutation(room);
+
+    applyFilter(); // refresh UI
+}
+
+function normalizeLedState(rawValue) {
+    if (rawValue === null || rawValue === undefined || rawValue === '') {
+        return null;
+    }
+
+    const text = String(rawValue).trim().toUpperCase();
+
+    if (text === '1' || text === 'ON' || text === 'HIGH' || text === 'TRUE') {
+        return 'ON';
+    }
+
+    if (text === '0' || text === 'OFF' || text === 'LOW' || text === 'FALSE') {
+        return 'OFF';
+    }
+
+    const numeric = Number.parseInt(text, 10);
+    if (!Number.isNaN(numeric)) {
+        return numeric === 1 ? 'ON' : 'OFF';
+    }
+
+    return null;
+}
+
+function evaluateRoom101PresenceState(pir, distance, previousDistance) {
+    const stableThresholdCm = 5;
+
+    if (pir === 1 && distance < 50) {
+        return { present: 'YES', label: 'ENTERING' };
+    }
+
+    if (pir === 1 && distance > 150) {
+        return { present: 'YES', label: 'INSIDE/MOVING' };
+    }
+
+    if (pir === 1) {
+        return { present: 'YES', label: 'MOTION DETECTED' };
+    }
+
+    const hasPrevious = typeof previousDistance === 'number' && !Number.isNaN(previousDistance);
+    const isStable = hasPrevious && Math.abs(distance - previousDistance) <= stableThresholdCm;
+
+    if (isStable) {
+        return { present: 'NO', label: 'STATIONARY/LEFT' };
+    }
+
+    return { present: 'NO', label: 'NO MOTION' };
+}
+
+function sendRoomCommand(room, command) {
+
+    if (room !== "Room 101") {
+        alert("⚠️ Control only available for Room 101");
+        return;
+    }
+
+    if (client.connected) {
+        client.publish("smartroom/control", command);
+        console.log(`📤 ${room} → ${command}`);
+    } else {
+        console.log("❌ MQTT not connected");
+    }
+}
+
+function updateThingSpeakFetchPanel(status, statusClass, sourceTime) {
+    const statusElement = document.getElementById('tsFetchStatus');
+    const fetchTimeElement = document.getElementById('tsFetchTime');
+    const sourceTimeElement = document.getElementById('tsSourceTime');
+    const now = new Date();
+
+    if (statusElement) {
+        statusElement.textContent = status;
+        statusElement.className = `ts-status ${statusClass}`;
+    }
+
+    if (fetchTimeElement) {
+        fetchTimeElement.textContent = `Fetched at: ${now.toLocaleTimeString()}`;
+    }
+
+    if (sourceTimeElement) {
+        sourceTimeElement.textContent = sourceTime ? `Feed time: ${new Date(sourceTime).toLocaleString()}` : 'Feed time: --';
+    }
+}
+
+async function fetchThingSpeakData() {
+    try {
+        updateThingSpeakFetchPanel('Fetching...', 'loading');
+
+        const response = await fetch(THINGSPEAK_URL, { cache: "no-store" });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`HTTP ${response.status} - ${errorBody}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.feeds || data.feeds.length === 0) {
+            console.warn("ThingSpeak returned no feeds. Check channel visibility/read API key.");
+            updateThingSpeakFetchPanel('No feed data', 'error');
+            return;
+        }
+
+        const feed = data.feeds[0];
+
+        const pir = Number.parseInt(feed.field1, 10);
+        const ldr = Number.parseInt(feed.field2, 10);
+        const distance = Number.parseInt(feed.field3, 10);
+        const ledState = normalizeLedState(feed.field4);
+
+        if (Number.isNaN(pir) || Number.isNaN(ldr) || Number.isNaN(distance)) {
+            console.warn("ThingSpeak feed fields are invalid:", feed);
+            updateThingSpeakFetchPanel('Invalid feed fields', 'error', feed.created_at);
+            return;
+        }
+
+        console.log("ThingSpeak Data:", pir, ldr, distance, ledState);
+        updateThingSpeakFetchPanel(`OK (Entry ${feed.entry_id ?? '-'})`, 'success', feed.created_at);
+
+        updateRoom101(pir, ldr, distance, ledState, feed.created_at);
+
+    } catch (error) {
+        console.error("Error fetching ThingSpeak:", error);
+        updateThingSpeakFetchPanel('Fetch failed', 'error');
+    }
+}
+
+function updateRoom101(pir, ldr, distance, ledState, sourceTimestamp) {
+    const room = roomData.find(r => r.room === "Room 101");
+
+    if (!room) return;
+
+    const previousDistance = room.distance;
+
+    room.pir = pir;
+    room.ldr = ldr;
+    room.distance = distance;
+
+    const logic = calculateLightStatus(pir, ldr, distance);
+    const presence = evaluateRoom101PresenceState(pir, distance, previousDistance);
+
+    room.ledState = ledState;
+    room.lightStatus = ledState || logic.lightStatus;
+    room.peoplePresent = presence.present;
+    room.peopleStatusLabel = presence.label;
+
+    const now = new Date();
+    room.updateTime = now.toLocaleTimeString();
+    room.lastUpdate = now.toLocaleDateString();
+
+    if (sourceTimestamp) {
+        trackRoom101EwsFromThingSpeak(room, sourceTimestamp);
+    } else {
+        syncEwsAfterStateMutation(room);
+    }
+
+    applyFilter();
+}
+
+function createDefaultEwsStats(nowMs) {
+    return {
+        totalLightOnMs: 0,
+        wasteMs: 0,
+        lastTrackedAt: nowMs,
+        currentSessionStartMs: null,
+        currentSessionLightOnMs: 0,
+        currentSessionWasteMs: 0,
+        sessions: []
+    };
+}
+
+function ensureEwsState(room) {
+    const nowMs = Date.now();
+
+    if (!room.ewsStats) {
+        room.ewsStats = createDefaultEwsStats(nowMs);
+    }
+
+    if (!Array.isArray(room.ewsStats.sessions)) {
+        room.ewsStats.sessions = [];
+    }
+
+    if (typeof room.ews !== 'number' || Number.isNaN(room.ews)) {
+        room.ews = 0;
+    }
+
+    return room.ewsStats;
+}
+
+function getRoomEwsPercent(room) {
+    const stats = ensureEwsState(room);
+
+    if (stats.totalLightOnMs <= 0) {
+        return 0;
+    }
+
+    return Number(((stats.wasteMs / stats.totalLightOnMs) * 100).toFixed(1));
+}
+
+function getEwsLevel(ewsValue) {
+    if (ewsValue > EWS_FLAG_THRESHOLD) return 'wasteful';
+    if (ewsValue >= 20) return 'moderate';
+    return 'efficient';
+}
+
+function finalizeEwsSession(room, sessionEndMs) {
+    const stats = ensureEwsState(room);
+
+    if (stats.currentSessionStartMs === null || stats.currentSessionLightOnMs <= 0) {
+        stats.currentSessionStartMs = null;
+        stats.currentSessionLightOnMs = 0;
+        stats.currentSessionWasteMs = 0;
+        return;
+    }
+
+    const sessionEws = stats.currentSessionLightOnMs > 0
+        ? Number(((stats.currentSessionWasteMs / stats.currentSessionLightOnMs) * 100).toFixed(1))
+        : 0;
+
+    stats.sessions.push({
+        startTime: new Date(stats.currentSessionStartMs).toISOString(),
+        endTime: new Date(sessionEndMs).toISOString(),
+        durationSec: Math.round((sessionEndMs - stats.currentSessionStartMs) / 1000),
+        lightOnSec: Math.round(stats.currentSessionLightOnMs / 1000),
+        wasteSec: Math.round(stats.currentSessionWasteMs / 1000),
+        ews: sessionEws,
+        sourceTimestamp: room.lastThingSpeakTimestamp || null
+    });
+
+    if (stats.sessions.length > EWS_SESSION_LIMIT) {
+        stats.sessions = stats.sessions.slice(-EWS_SESSION_LIMIT);
+    }
+
+    stats.currentSessionStartMs = null;
+    stats.currentSessionLightOnMs = 0;
+    stats.currentSessionWasteMs = 0;
+}
+
+function trackEwsForRoom(room, nowMs = Date.now()) {
+    const stats = ensureEwsState(room);
+
+    if (nowMs < stats.lastTrackedAt) {
+        stats.lastTrackedAt = nowMs;
+    }
+
+    const elapsedMs = Math.max(0, nowMs - stats.lastTrackedAt);
+    const lightOn = room.lightStatus === 'ON';
+    const noMotion = room.peoplePresent === 'NO';
+
+    if (lightOn) {
+        if (stats.currentSessionStartMs === null) {
+            stats.currentSessionStartMs = stats.lastTrackedAt;
+        }
+
+        stats.totalLightOnMs += elapsedMs;
+        stats.currentSessionLightOnMs += elapsedMs;
+
+        if (noMotion) {
+            stats.wasteMs += elapsedMs;
+            stats.currentSessionWasteMs += elapsedMs;
+        }
+    } else if (stats.currentSessionStartMs !== null) {
+        finalizeEwsSession(room, nowMs);
+    }
+
+    stats.lastTrackedAt = nowMs;
+
+    room.ews = getRoomEwsPercent(room);
+    room.ewsLevel = getEwsLevel(room.ews);
+    room.isWasteful = room.ews > EWS_FLAG_THRESHOLD;
+}
+
+function trackRoom101EwsFromThingSpeak(room, sourceTimestamp) {
+    const stats = ensureEwsState(room);
+    const currentTsMs = Date.parse(sourceTimestamp);
+
+    if (Number.isNaN(currentTsMs)) {
+        syncEwsAfterStateMutation(room, sourceTimestamp);
+        return;
+    }
+
+    const previousTsMs = room.lastThingSpeakTimestampMs;
+
+    if (typeof previousTsMs !== 'number' || Number.isNaN(previousTsMs) || currentTsMs <= previousTsMs) {
+        room.lastThingSpeakTimestamp = sourceTimestamp;
+        room.lastThingSpeakTimestampMs = currentTsMs;
+        stats.lastTrackedAt = currentTsMs;
+
+        if (room.lightStatus === 'ON' && stats.currentSessionStartMs === null) {
+            stats.currentSessionStartMs = currentTsMs;
+        }
+
+        if (room.lightStatus !== 'ON' && stats.currentSessionStartMs !== null) {
+            finalizeEwsSession(room, currentTsMs);
+        }
+
+        room.ews = getRoomEwsPercent(room);
+        room.ewsLevel = getEwsLevel(room.ews);
+        room.isWasteful = room.ews > EWS_FLAG_THRESHOLD;
+        saveEwsState();
+        return;
+    }
+
+    const elapsedMs = Math.max(0, currentTsMs - previousTsMs);
+    const lightOn = room.lightStatus === 'ON';
+    const noMotion = room.peoplePresent === 'NO';
+
+    if (lightOn) {
+        if (stats.currentSessionStartMs === null) {
+            stats.currentSessionStartMs = previousTsMs;
+        }
+
+        stats.totalLightOnMs += elapsedMs;
+        stats.currentSessionLightOnMs += elapsedMs;
+
+        if (noMotion) {
+            stats.wasteMs += elapsedMs;
+            stats.currentSessionWasteMs += elapsedMs;
+        }
+    } else if (stats.currentSessionStartMs !== null) {
+        finalizeEwsSession(room, currentTsMs);
+    }
+
+    stats.lastTrackedAt = currentTsMs;
+    room.lastThingSpeakTimestamp = sourceTimestamp;
+    room.lastThingSpeakTimestampMs = currentTsMs;
+    room.ews = getRoomEwsPercent(room);
+    room.ewsLevel = getEwsLevel(room.ews);
+    room.isWasteful = room.ews > EWS_FLAG_THRESHOLD;
+
+    saveEwsState();
+}
+
+function syncEwsAfterStateMutation(room, sourceTimestamp) {
+    const stats = ensureEwsState(room);
+    const nowMs = Date.now();
+
+    if (sourceTimestamp) {
+        room.lastThingSpeakTimestamp = sourceTimestamp;
+    }
+
+    stats.lastTrackedAt = nowMs;
+
+    if (room.lightStatus === 'ON' && stats.currentSessionStartMs === null) {
+        stats.currentSessionStartMs = nowMs;
+        stats.currentSessionLightOnMs = 0;
+        stats.currentSessionWasteMs = 0;
+    }
+
+    if (room.lightStatus !== 'ON' && stats.currentSessionStartMs !== null) {
+        finalizeEwsSession(room, nowMs);
+    }
+
+    room.ews = getRoomEwsPercent(room);
+    room.ewsLevel = getEwsLevel(room.ews);
+    room.isWasteful = room.ews > EWS_FLAG_THRESHOLD;
+
+    saveEwsState();
+}
+
+function saveEwsState() {
+    const payload = {};
+
+    roomData.forEach(room => {
+        const stats = ensureEwsState(room);
+        payload[room.room] = {
+            ewsStats: stats,
+            ews: room.ews,
+            ewsLevel: room.ewsLevel,
+            isWasteful: room.isWasteful,
+            lastThingSpeakTimestamp: room.lastThingSpeakTimestamp || null,
+            ewsAlertRaised: !!room.ewsAlertRaised
+        };
+    });
+
+    localStorage.setItem(EWS_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function loadEwsState() {
+    const raw = localStorage.getItem(EWS_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+        const parsed = JSON.parse(raw);
+
+        roomData.forEach(room => {
+            const existing = parsed[room.room];
+            if (!existing) {
+                ensureEwsState(room);
+                return;
+            }
+
+            room.ewsStats = existing.ewsStats || createDefaultEwsStats(Date.now());
+            room.ews = typeof existing.ews === 'number' ? existing.ews : getRoomEwsPercent(room);
+            room.ewsLevel = existing.ewsLevel || getEwsLevel(room.ews);
+            room.isWasteful = !!existing.isWasteful;
+            room.lastThingSpeakTimestamp = existing.lastThingSpeakTimestamp || null;
+            room.ewsAlertRaised = !!existing.ewsAlertRaised;
+
+            ensureEwsState(room);
+        });
+    } catch (error) {
+        console.warn('Failed to restore EWS state:', error);
+    }
+}
+
+function trackAllRoomsEws() {
+    const nowMs = Date.now();
+
+    roomData.forEach(room => {
+        if (room.isRealTime && room.room === 'Room 101') {
+            return;
+        }
+
+        trackEwsForRoom(room, nowMs);
+
+        if (room.ews > EWS_FLAG_THRESHOLD && !room.ewsAlertRaised) {
+            room.ewsAlertRaised = true;
+            console.warn(`⚠️ Energy Waste Detected in ${room.room} (EWS ${room.ews}%)`);
+        }
+
+        if (room.ews <= EWS_FLAG_THRESHOLD) {
+            room.ewsAlertRaised = false;
+        }
+    });
+
+    saveEwsState();
+}
+
+function formatMinutesFromSeconds(totalSeconds) {
+    return `${Math.max(0, Math.round(totalSeconds / 60))} min`;
+}
+
+function renderRoom101SessionAnalysis() {
+    const room = roomData.find(r => r.room === 'Room 101');
+    const rowsElement = document.getElementById('ewsSessionRows');
+    const overallDurationElement = document.getElementById('ewsOverallDuration');
+    const overallLightOnElement = document.getElementById('ewsOverallLightOn');
+    const overallNoMotionElement = document.getElementById('ewsOverallNoMotion');
+    const overallScoreElement = document.getElementById('ewsOverallScore');
+    const overallStatusElement = document.getElementById('ewsOverallStatus');
+    const chartCanvas = document.getElementById('ewsTrendChart');
+
+    if (!room || !rowsElement || !chartCanvas) {
+        return;
+    }
+
+    const analyticsView = document.getElementById('analyticsView');
+    if (analyticsView && analyticsView.style.display === 'none') {
+        return;
+    }
+
+    const stats = ensureEwsState(room);
+    const nowMs = Date.now();
+    const sessions = [...(stats.sessions || [])];
+
+    if (stats.currentSessionStartMs !== null) {
+        const runningDurationSec = Math.max(0, Math.round((nowMs - stats.currentSessionStartMs) / 1000));
+        const runningLightOnSec = Math.max(0, Math.round(stats.currentSessionLightOnMs / 1000));
+        const runningWasteSec = Math.max(0, Math.round(stats.currentSessionWasteMs / 1000));
+        const runningEws = stats.currentSessionLightOnMs > 0
+            ? Number(((stats.currentSessionWasteMs / stats.currentSessionLightOnMs) * 100).toFixed(1))
+            : 0;
+
+        sessions.push({
+            startTime: new Date(stats.currentSessionStartMs).toISOString(),
+            endTime: null,
+            durationSec: runningDurationSec,
+            lightOnSec: runningLightOnSec,
+            wasteSec: runningWasteSec,
+            ews: runningEws,
+            sourceTimestamp: room.lastThingSpeakTimestamp || null,
+            isLive: true
+        });
+    }
+
+    const sessionWindow = sessions.slice(-6);
+
+    if (sessionWindow.length === 0) {
+        rowsElement.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666;">No session data yet</td></tr>';
+    } else {
+        rowsElement.innerHTML = sessionWindow.map((session, index) => {
+            const ewsValue = Number(session.ews || 0).toFixed(1);
+            const flagged = Number(session.ews || 0) > EWS_FLAG_THRESHOLD;
+            const statusClass = flagged ? 'ews-status-flagged' : 'ews-status-normal';
+            const statusText = flagged ? 'Flagged' : 'Normal';
+
+            return `
+                <tr>
+                    <td>Session ${index + 1}${session.isLive ? ' (Live)' : ''}</td>
+                    <td>${formatMinutesFromSeconds(session.durationSec || 0)}</td>
+                    <td>${formatMinutesFromSeconds(session.lightOnSec || 0)}</td>
+                    <td>${formatMinutesFromSeconds(session.wasteSec || 0)}</td>
+                    <td class="${flagged ? 'ews-highlight' : ''}">${ewsValue}%</td>
+                    <td class="${statusClass}">${statusText}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    const totalDurationSec = sessions.reduce((sum, s) => sum + (s.durationSec || 0), 0);
+    const totalLightOnSec = Math.round(stats.totalLightOnMs / 1000);
+    const totalNoMotionSec = Math.round(stats.wasteMs / 1000);
+    const overallEws = totalLightOnSec > 0 ? Number(((totalNoMotionSec / totalLightOnSec) * 100).toFixed(1)) : 0;
+    const overallFlagged = overallEws > EWS_FLAG_THRESHOLD;
+
+    if (overallDurationElement) {
+        overallDurationElement.textContent = formatMinutesFromSeconds(totalDurationSec);
+    }
+    if (overallLightOnElement) {
+        overallLightOnElement.textContent = formatMinutesFromSeconds(totalLightOnSec);
+    }
+    if (overallNoMotionElement) {
+        overallNoMotionElement.textContent = formatMinutesFromSeconds(totalNoMotionSec);
+    }
+    if (overallScoreElement) {
+        overallScoreElement.textContent = `${overallEws}%`;
+        overallScoreElement.className = overallFlagged ? 'ews-highlight' : '';
+    }
+    if (overallStatusElement) {
+        overallStatusElement.textContent = overallFlagged ? 'Flagged' : 'Normal';
+        overallStatusElement.className = overallFlagged ? 'ews-status-flagged' : 'ews-status-normal';
+    }
+
+    if (typeof Chart !== 'undefined') {
+        // Keep chart based on completed sessions to avoid visual drift from frequent UI refreshes.
+        const chartSessions = (stats.sessions || []).slice(-6);
+        const labels = chartSessions.map((_, idx) => `Session ${idx + 1}`);
+        const ewsSeries = chartSessions.map(session => Number((session.ews || 0).toFixed(1)));
+        const thresholdSeries = labels.map(() => EWS_FLAG_THRESHOLD);
+        const renderKey = JSON.stringify({ labels, ewsSeries });
+
+        if (ewsTrendChartInstance && renderKey === ewsTrendLastRenderKey) {
+            return;
+        }
+
+        const chartParent = chartCanvas.parentElement;
+        const parentWidth = chartParent ? Math.max(320, Math.floor(chartParent.clientWidth) - 4) : 560;
+        chartCanvas.width = parentWidth;
+        chartCanvas.height = 220;
+
+        if (!ewsTrendChartInstance) {
+            ewsTrendChartInstance = new Chart(chartCanvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'EWS (%)',
+                            data: ewsSeries,
+                            borderColor: '#1f77d0',
+                            backgroundColor: 'rgba(31, 119, 208, 0.15)',
+                            pointBackgroundColor: '#1f77d0',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        {
+                            label: `Inefficiency Threshold (${EWS_FLAG_THRESHOLD}%)`,
+                            data: thresholdSeries,
+                            borderColor: '#d9534f',
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'EWS (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Sessions'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        } else {
+            ewsTrendChartInstance.data.labels = labels;
+            ewsTrendChartInstance.data.datasets[0].data = ewsSeries;
+            ewsTrendChartInstance.data.datasets[1].data = thresholdSeries;
+            ewsTrendChartInstance.resize();
+            ewsTrendChartInstance.update('none');
+        }
+
+        ewsTrendLastRenderKey = renderKey;
     }
 }
 
@@ -288,6 +957,27 @@ let roomData = [
 let groups = [];
 let currentFilter = 'all';
 let filteredData = [...roomData];
+
+function initializeEwsTracking() {
+    roomData.forEach(room => {
+        ensureEwsState(room);
+        room.ews = getRoomEwsPercent(room);
+        room.ewsLevel = getEwsLevel(room.ews);
+        room.isWasteful = room.ews > EWS_FLAG_THRESHOLD;
+    });
+
+    loadEwsState();
+
+    roomData.forEach(room => {
+        if (room.isRealTime && room.room === 'Room 101') {
+            return;
+        }
+
+        trackEwsForRoom(room, Date.now());
+    });
+}
+
+initializeEwsTracking();
 
 // --- 🔄 UPDATE FROM CSV (with Admin Override Support) ---
 function updateFromCSV() {
@@ -328,6 +1018,7 @@ function updateFromCSV() {
         const now = new Date();
         realTimeRoomObject.updateTime = now.toLocaleTimeString('en-US', { hour12: false });
         realTimeRoomObject.lastUpdate = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' });
+        syncEwsAfterStateMutation(realTimeRoomObject);
         
         console.log(`✅ Room 101 AUTO [${currentDataIndex}/${csvData.length}] - ${realTimeRoomObject.updateTime} | PIR: ${dataPoint.pir} | LDR: ${dataPoint.ldr} | Distance: ${dataPoint.distance}cm | Light: ${logic.lightStatus}`);
         
@@ -355,6 +1046,7 @@ function applyAdminCase(override) {
         const now = new Date();
         realTimeRoomObject.updateTime = now.toLocaleTimeString('en-US', { hour12: false });
         realTimeRoomObject.lastUpdate = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' });
+        syncEwsAfterStateMutation(realTimeRoomObject);
         
         console.log(`🎛️ Room 101 MANUAL (Case ${override.case}) - ${realTimeRoomObject.updateTime} | PIR: ${caseData.pir} | LDR: ${caseData.ldr} | Distance: ${caseData.distance}cm | Light: ${logic.lightStatus}`);
         
@@ -509,14 +1201,15 @@ function printReport() {
 
 // Download CSV
 function downloadCSV() {
-    let csv = 'Room Number,Last Update,PIR Motion,LDR Light,Distance (cm),Light Status,People Present,Update Time\n';
+    let csv = 'Room Number,Last Update,PIR Motion,LDR Light,Distance (cm),Light Status,People Present,EWS (%),Update Time\n';
     
     filteredData.forEach(row => {
         const distanceText = row.pir === 1 ? row.distance : 'N/A';
         const pirText = row.pir === 1 ? 'DETECTED' : 'CLEAR';
         const ldrText = row.ldr === 1 ? 'BRIGHT' : 'DARK';
         
-        csv += `"${row.room}","${row.lastUpdate}","${pirText}","${ldrText}","${distanceText}","${row.lightStatus}","${row.peoplePresent}","${row.updateTime}"\n`;
+        const ewsText = typeof row.ews === 'number' ? row.ews : getRoomEwsPercent(row);
+        csv += `"${row.room}","${row.lastUpdate}","${pirText}","${ldrText}","${distanceText}","${row.lightStatus}","${row.peoplePresent}","${ewsText}","${row.updateTime}"\n`;
     });
     
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -580,7 +1273,7 @@ function populateTable(data) {
     tbody.innerHTML = '';
     
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: #999;">No rooms found matching your filter</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 30px; color: #999;">No rooms found matching your filter</td></tr>';
         return;
     }
     
@@ -590,15 +1283,38 @@ function populateTable(data) {
         if (row.isRealTime) {
             tr.classList.add('real-time-room');
         }
+
+        if (row.isWasteful) {
+            tr.classList.add('waste-flagged');
+        }
         
         const logic = calculateLightStatus(row.pir, row.ldr, row.distance);
-        row.lightStatus = logic.lightStatus;
-        row.peoplePresent = logic.peoplePresent;
+        const isRoom101Realtime = row.isRealTime && row.room === 'Room 101';
+
+        if (isRoom101Realtime) {
+            if (row.ledState) {
+                row.lightStatus = row.ledState;
+            } else {
+                row.lightStatus = logic.lightStatus;
+            }
+
+            if (!row.peopleStatusLabel) {
+                const presence = evaluateRoom101PresenceState(row.pir, row.distance, row.distance);
+                row.peoplePresent = presence.present;
+                row.peopleStatusLabel = presence.label;
+            }
+        } else {
+            row.lightStatus = logic.lightStatus;
+            row.peoplePresent = logic.peoplePresent;
+        }
         
         const pirStatus = row.pir === 1 ? 'DETECTED' : 'CLEAR';
         const pirClass = row.pir === 1 ? 'detected' : 'clear';
         const lightClass = row.lightStatus === 'ON' ? 'on' : 'off';
+        const peopleDisplay = isRoom101Realtime ? (row.peopleStatusLabel || row.peoplePresent) : row.peoplePresent;
         const peopleClass = row.peoplePresent === 'YES' ? 'yes' : 'no';
+        const ewsValue = typeof row.ews === 'number' ? row.ews : getRoomEwsPercent(row);
+        const ewsLevel = getEwsLevel(ewsValue);
         const ldrLevel = row.ldr >= 300 ? 'BRIGHT' : 'DARK';
         const ldrBadgeClass = row.ldr >= 300 ? 'green' : '';
         
@@ -643,9 +1359,19 @@ function populateTable(data) {
                 <span class="status-badge ${lightClass}">${row.lightStatus}</span>
             </td>
             <td>
-                <span class="status-badge ${peopleClass}">${row.peoplePresent}</span>
+                <span class="status-badge ${peopleClass}">${peopleDisplay}</span>
             </td>
-            <td class="time-text">⏰ ${row.updateTime}</td>
+            <td>
+                <span class="ews-badge ${ewsLevel}">${ewsValue}%</span>
+            </td>
+            <td>
+                ${row.isRealTime ? `
+                    <button onclick="sendRoomCommand('${row.room}', 'ON')">ON</button>
+                    <button onclick="sendRoomCommand('${row.room}', 'OFF')">OFF</button>
+                ` : `
+                    <span style="color: gray;">No Control</span>
+                `}
+            </td>
         `;
         
         tbody.appendChild(tr);
@@ -727,6 +1453,8 @@ function addNewRoom() {
     };
     
     roomData.push(newRoom);
+    ensureEwsState(newRoom);
+    syncEwsAfterStateMutation(newRoom);
     document.getElementById('newRoomName').value = '';
     populateRoomList();
     applyFilter();
@@ -740,6 +1468,7 @@ function deleteRoom(roomName) {
     }
     
     roomData = roomData.filter(r => r.room !== roomName);
+    saveEwsState();
     populateRoomList();
     applyFilter();
     
@@ -839,6 +1568,7 @@ function simulateRealTimeUpdate() {
     roomData[originalIndex].lightStatus = logic.lightStatus;
     roomData[originalIndex].peoplePresent = logic.peoplePresent;
     roomData[originalIndex].updateTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+    syncEwsAfterStateMutation(roomData[originalIndex]);
     
     applyFilter();
 }
@@ -859,6 +1589,9 @@ function showTab(tabName) {
         document.getElementById('analyticsView').style.display = 'block';
         document.getElementById('controlBar').style.display = 'none';
         updateAnalytics();
+        setTimeout(() => {
+            renderRoom101SessionAnalysis();
+        }, 0);
     }
 }
 
@@ -887,6 +1620,33 @@ function updateAnalytics() {
     document.getElementById('energyWaste').textContent = waste;
     document.getElementById('efficient').textContent = efficient;
     document.getElementById('efficiencyRate').textContent = efficiencyRate + '%';
+
+    const highWasteRooms = currentData.filter(r => (r.ews || 0) > EWS_FLAG_THRESHOLD).length;
+    const avgEws = totalRooms > 0
+        ? Number((currentData.reduce((sum, room) => sum + (room.ews || 0), 0) / totalRooms).toFixed(1))
+        : 0;
+    const worstRoomData = currentData.reduce((worst, room) => {
+        if (!worst || (room.ews || 0) > (worst.ews || 0)) {
+            return room;
+        }
+        return worst;
+    }, null);
+
+    const highWasteElement = document.getElementById('highWasteRooms');
+    const avgEwsElement = document.getElementById('avgEws');
+    const worstRoomElement = document.getElementById('worstRoom');
+
+    if (highWasteElement) {
+        highWasteElement.textContent = highWasteRooms;
+    }
+
+    if (avgEwsElement) {
+        avgEwsElement.textContent = `${avgEws}%`;
+    }
+
+    if (worstRoomElement) {
+        worstRoomElement.textContent = worstRoomData ? `${worstRoomData.room} (${worstRoomData.ews || 0}%)` : '-';
+    }
     
     const motionDetected = currentData.filter(r => r.pir === 1).length;
     const motionClear = currentData.filter(r => r.pir === 0).length;
@@ -915,6 +1675,7 @@ function updateAnalytics() {
                     <div>💡 Light: <strong>${roomItem.lightStatus}</strong></div>
                     <div>🎯 Motion: <strong>${roomItem.pir === 1 ? 'DETECTED' : 'CLEAR'}</strong></div>
                     <div>📏 Distance: <strong>${distanceText}</strong></div>
+                    <div>⚠️ EWS: <strong>${roomItem.ews || 0}%</strong></div>
                     <div>⏰ ${roomItem.updateTime}</div>
                 </div>
             </div>
@@ -952,6 +1713,7 @@ function updateAnalytics() {
     }).join('');
     
     document.getElementById('topRoomsList').innerHTML = topRoomsHtml || '<p>No active rooms at the moment</p>';
+    renderRoom101SessionAnalysis();
     
     console.log('📊 Analytics updated.');
 }
@@ -965,7 +1727,16 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!logic.showDistance) {
             room.distance = generateDistance(false);
         }
+
+        if (room.isRealTime && room.room === 'Room 101') {
+            ensureEwsState(room);
+        } else {
+            syncEwsAfterStateMutation(room);
+        }
     });
+
+    trackAllRoomsEws();
+    setInterval(trackAllRoomsEws, 1000);
     
     populateTable(roomData);
     
@@ -977,14 +1748,17 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log(`CSV Data Points: ${csvData.length} records loaded`);
     console.log(`==========================================`);
     
-    // Start CSV updates immediately
-    updateFromCSV();
+    // Room 101 is driven by ThingSpeak now, so avoid CSV overwrite on startup.
+    // updateFromCSV();
+
+    setInterval(fetchThingSpeakData, 15000); // every 15 sec
+    fetchThingSpeakData(); // first load
     
     // Start dummy data simulation every 3 seconds (for other rooms)
     setInterval(simulateRealTimeUpdate, 3000);
     
     // Start CSV data updates every 5 seconds (for Room 101)
-    setInterval(updateFromCSV, CSV_CONFIG.updateInterval);
+    // setInterval(updateFromCSV, CSV_CONFIG.updateInterval);
     
     // Listen for localStorage changes (when admin makes changes)
     window.addEventListener('storage', function(e) {

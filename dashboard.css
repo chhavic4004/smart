@@ -203,6 +203,57 @@ body {
     background: #f5f5f5;
 }
 
+.thingspeak-panel {
+    background: #f4f9ff;
+    border-bottom: 1px solid #d8e7f7;
+    padding: 8px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 13px;
+}
+
+.ts-label {
+    font-weight: 700;
+    color: #0f4f8a;
+}
+
+.ts-status {
+    padding: 2px 8px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.ts-status.idle {
+    color: #5f6368;
+    border-color: #c9ccd1;
+    background: #eef0f3;
+}
+
+.ts-status.loading {
+    color: #8a6d1f;
+    border-color: #eed38d;
+    background: #fff6df;
+}
+
+.ts-status.success {
+    color: #0e5d35;
+    border-color: #8fd2ae;
+    background: #e7f8ee;
+}
+
+.ts-status.error {
+    color: #8d1f2d;
+    border-color: #ec9ca7;
+    background: #ffecef;
+}
+
+.ts-time,
+.ts-source-time {
+    color: #4a4f55;
+}
+
 /* Data Table */
 .table-container {
     background: white;
@@ -253,8 +304,36 @@ body {
     background: #fafafa;
 }
 
+.data-table tbody tr.waste-flagged {
+    background: #fff2f2;
+}
+
 .checkbox-col {
     width: 40px;
+}
+
+.ews-badge {
+    display: inline-block;
+    min-width: 64px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+}
+
+.ews-badge.efficient {
+    background: #d7f1de;
+    color: #0c5e34;
+}
+
+.ews-badge.moderate {
+    background: #fff3cd;
+    color: #7a5a00;
+}
+
+.ews-badge.wasteful {
+    background: #f8d7da;
+    color: #8d1f2d;
 }
 
 /* Status Badges */
@@ -560,6 +639,11 @@ body {
     .control-bar {
         flex-direction: column;
         gap: 10px;
+    }
+
+    .thingspeak-panel {
+        gap: 8px;
+        font-size: 12px;
     }
     
     .modal-content {
@@ -1064,4 +1148,78 @@ tr.real-time-room {
 .room-card.real-time-card {
     border: 2px solid #00aaff;
     box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+}
+
+.ews-session-section {
+    border: 1px dashed #8db8e4;
+    background: #fcfdff;
+}
+
+.ews-session-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+.ews-chart-panel,
+.ews-table-panel {
+    background: white;
+    border: 1px solid #dbe7f3;
+    padding: 12px;
+}
+
+.ews-chart-panel {
+    min-height: 260px;
+}
+
+.ews-chart-panel h4 {
+    margin: 0 0 10px 0;
+    color: #445;
+    font-size: 13px;
+}
+
+.ews-session-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.ews-session-table th,
+.ews-session-table td {
+    border: 1px solid #e3e9f0;
+    padding: 8px;
+    text-align: center;
+}
+
+.ews-session-table th {
+    background: #f5f8fc;
+    color: #445;
+    font-weight: 700;
+}
+
+.ews-session-table tfoot td {
+    background: #eef5fd;
+    font-weight: 700;
+}
+
+.ews-status-normal {
+    color: #177245;
+    font-weight: 700;
+}
+
+.ews-status-flagged {
+    color: #c0392b;
+    font-weight: 700;
+}
+
+.ews-highlight {
+    color: #c0392b;
+    font-weight: 700;
+}
+
+@media (max-width: 1024px) {
+    .ews-session-layout {
+        grid-template-columns: 1fr;
+    }
 }
